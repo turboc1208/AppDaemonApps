@@ -25,7 +25,7 @@ class sunrise_sunset(appapi.AppDaemon):
     # listen for change in morning value
     #self.listen_state(self.morning_change)
     self.listen_state(self.light_timeout_check, new="on")
-    self.listen_state(self.light_timeout_check, entity="input_slider")
+    self.listen_state(self.process_input_slider, entity="input_slider")
     self.run_at_sunset(self.begin_nighttime)
     self.run_at_sunrise(self.begin_morning)
   
@@ -38,7 +38,6 @@ class sunrise_sunset(appapi.AppDaemon):
     else:
       if self.get_state("switch.carriage_lights")=='on':
         self.turn_on("switch.carriage_lights")
-
     for e in self.timeout_list:
       self.schedule_event(e)   
 
@@ -51,7 +50,7 @@ class sunrise_sunset(appapi.AppDaemon):
     self.turn_off("switch.carriage_lights")
 
   def schedule_event(self,entity):
-    if self.now_is_between(self.times['nighttime'],self.times['morning']):
+    if self.now_is_between(self.times['nighttime'],self.times['morning']) and self.get_state(entity)=="on":
       self.timeout_list[entity]=self.time()
       self.run_in(self.turn_light_off,self.times['timeout'],entity_id=entity)
       self.log("scheduled to run in {} seconds for {} timeout_list={}".format(self.times['timeout'],entity,self.timeout_list))
@@ -59,7 +58,9 @@ class sunrise_sunset(appapi.AppDaemon):
   def light_timeout_check(self, entity, attribute, old, new, kwargs):
     if entity in self.timeout_list:
       self.schedule_event(entity)
-    elif entity in ['input_slider.nighttime_hour','input_slider.nighttime_minutes','input_slider.morning_hour','input_slider.morning_minutes']:
+  
+  def process_input_slider(self, entity, attribute, old, new, kwargs):
+    if entity in ['input_slider.nighttime_hour','input_slider.nighttime_minutes','input_slider.morning_hour','input_slider.morning_minutes']:
       # someone changed the timeout times using the sliders.
       tod=entity[entity.find('.')+1:entity.find('_',6)]
       timevalue=str(int(float(new)))
