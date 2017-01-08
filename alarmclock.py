@@ -1,3 +1,10 @@
+#
+# Alarm Clock - for HomeAssistant
+#
+# Written By : Chip Cox
+#
+# Jan 8, 2017 - Added Comments
+#
 import appdaemon.appapi as appapi
 import os
 import json
@@ -7,10 +14,10 @@ class alarmclock(appapi.AppDaemon):
   
   # Created an initialization file just to mimic AD it's called from __init__
   def initialize(self):
-      self.log("in initialize")
+      self.log("in initialize",level="INFO")
       # initialize variables
       self.filename=self.config["AppDaemon"]["app_dir"] + "/" + "alarm_clock.cfg"
-      self.log("filename= {}".format(self.filename))
+      self.log("filename= {}".format(self.filename),level="DEBUG")
       self.alarms={}
       self.alarmhandles={}
       self.done=False
@@ -29,7 +36,7 @@ class alarmclock(appapi.AppDaemon):
 
   # handle HA restart
   def restartHA(self,event_name,data,kwargs):
-      self.log("HA event {}".format(event_name))
+      self.log("HA event {}".format(event_name),level="WARNING")
       self.updateHA()
 
   # update initial values in HA after HA restart or AD restart
@@ -59,7 +66,7 @@ class alarmclock(appapi.AppDaemon):
 
   # Save alarms file to a json file
   def savealarms(self):
-      self.log("in savealarms")
+      self.log("in savealarms",level="DEBUG")
       fout=open(self.filename,"wt")
       self.displayalarms()
       json.dump(self.alarms,fout)
@@ -67,7 +74,7 @@ class alarmclock(appapi.AppDaemon):
 
   # Load alarms from the json file
   def loadalarms(self):
-     self.log("checking on file {}".format(self.filename))
+     self.log("checking on file {}".format(self.filename),level="DEBUG")
      if os.path.exists(self.filename) : 
          # file exists so open and load data
          fout=open(self.filename,"rt")
@@ -75,6 +82,7 @@ class alarmclock(appapi.AppDaemon):
          fout.close()
          # Set values on input sliders and activation switch in HA
      else:
+         self.log("File {} does not exist".format(self.filename),level="WARNING")
          # file does not exist so initialize alarms
          self.alarms={}
       
@@ -101,22 +109,22 @@ class alarmclock(appapi.AppDaemon):
 
   # input boolean for turning the alarm on or off
   def handle_input_boolean(self, entity, attribute, old, new, kwargs):
-       self.log("in handle_input_boolean")
+       self.log("in handle_input_boolean",level="DEBUG")
        room=entity[entity.find(".")+1:entity.find("alarm")].lower()
        if room in ['sam','charlie','master','guest']:
          if len(entity)>entity.find("alarm")+5 :
             dow=entity[entity.find("alarm")+5:]
-            self.log("dow={}".format(dow))
+            self.log("dow={}".format(dow),level="DEBUG")
             self.alarms[room][dow]=new
          else:
             self.alarms[room]["active"]=new
-            self.log("room {} active set to {}".format(room,new))
+            self.log("room {} active set to {}".format(room,new),level="DEBUG")
          self.schedulealarm(room)
          self.savealarms()
 
   # This would be the callback function when an input_slider is changed
   def handle_input_slider(self, entity, attribute, old, new, kwargs):
-       self.log("in handle_input_slider")
+       self.log("in handle_input_slider",level="DEBUG")
        room=entity[entity.find(".")+1:entity.find("alarm")].lower()
        if room in self.roomlist:
          timeincrement=entity[entity.find("alarm")+5:].lower()
@@ -129,7 +137,7 @@ class alarmclock(appapi.AppDaemon):
              maxvalue=59
 
          if (x>=0) and (x <= maxvalue) :
-            self.log("value good")
+            self.log("value good",level="DEBUG")
          if room in self.alarms :
             self.updatealarm(room,timeincrement,x)
          else :
@@ -139,10 +147,10 @@ class alarmclock(appapi.AppDaemon):
          self.schedulealarm(room)
          self.savealarms()
        else:
-         self.log("room {} is not in roomlist {}".format(room,self.roomlist))
+         self.log("room {} is not in roomlist {}".format(room,self.roomlist),level="WARNING")
 
   def schedulealarm(self,room):
-    self.log("In schedulealarm - {}".format(room))
+    self.log("In schedulealarm - {}".format(room),level="DEBUG")
     # if the alarm is active then schedule it
     if self.alarms[room]["active"] == "on":
       # make a valid time string
@@ -150,19 +158,19 @@ class alarmclock(appapi.AppDaemon):
       alarmtime=self.parse_time(timestr)
       # if there isn't a current alarmhandle the just schedule the alarm, else cancel the current alarmhandle and create a new one
       if self.alarmhandles.get(room,"")=="":
-        self.log("handle was empty")
+        self.log("handle was empty",level="DEBUG")
         self.alarmhandles[room]=self.run_daily(self.alarm_lights,alarmtime,arg1=room)
       else:
         # an alarm handle already existed so delete it and create a new one with the corrected time.
-        self.log("Handle already existed {}".format(self.alarmhandles[room]))
+        self.log("Handle already existed {}".format(self.alarmhandles[room]),level="DEBUG")
         self.cancel_timer(self.alarmhandles[room])
         handle=self.run_daily(self.alarm_lights,alarmtime,arg1=room)
         self.alarmhandles[room]=handle
     else:
-      self.log("alarm for room {} is in state {}".format(room,self.alarms[room]["active"]))
+      self.log("alarm for room {} is in state {}".format(room,self.alarms[room]["active"]),level="DEBUG")
       # the alarm is not on in this room, so if there is a current schedule for it, remove it.
       if room in self.alarmhandles :
-        self.log("removing existing alarm from schedule")
+        self.log("removing existing alarm from schedule","DEBUG")
         self.cancel_timer(self.alarmhandles[room])
 
   # right now, we only have one light in each room to turn on, and they are named consistently
@@ -173,20 +181,20 @@ class alarmclock(appapi.AppDaemon):
     todaydow=datetime.datetime.today().weekday()
     if self.alarms[room][self.dow[todaydow]]=="on":
       self.turn_on("light.{}_light_switch".format(room))
-      self.log("Lights should have been turned on light.{}_light_switch".format(room))
+      self.log("Lights should have been turned on light.{}_light_switch".format(room),level="INFO")
     else:
-      self.log("Lights not scheduled for today {}= {}".format(room,self.alarms[room][self.dow[todaydow]]))
+      self.log("Lights not scheduled for today {}= {}".format(room,self.alarms[room][self.dow[todaydow]]),level="INFO")
 
   # Display single alarm data
   def displayalarm(self,room):
-      self.log("Room={}".format(room))
-      self.log("Attribut  Value")
+      self.log("Room={}".format(room),level="DEBUG")
+      self.log("Attribute  Value",level="DEBUG")
       for alarmattribute,value in self.alarms[room].items():
-            self.log("{}{}".format(alarmattribute.ljust(10),value))
-      self.log(" ")
+            self.log("{}{}".format(alarmattribute.ljust(11),value),level="DEBUG")
+      self.log(" ",level="DEBUG")
 
   # Display all alarms by looping through all rooms and calling displayalarm above.
   def displayalarms(self):
-      self.log("Displaying all alarms")
+      self.log("Displaying all alarms",level="DEBUG")
       for room,alarmdict in self.alarms.items() :
         self.displayalarm(room)
