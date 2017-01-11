@@ -10,6 +10,11 @@ class speaknow(appapi.AppDaemon):
   def initialize(self):
     self.filelist = {"1":["empty"],"2":["empty"],"3":["empty"],"4":["empty"],"5":["empty"]}
     self.run_in(self.check_soundlist,2)
+    self.listen_event(self.handle_speak_event,"SPEAK_EVENT")
+
+  def handle_speak_event(self, event_name, data, kwargs):
+    self.log("handling speak event {} text={} priority={}".format(event_name,data["text"],data["priority"]))
+    self.say(data["text"],"en",data["priority"])
 
   def check_soundlist(self, kwargs):
 #    self.log("runsound is running")
