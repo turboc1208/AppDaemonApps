@@ -15,6 +15,7 @@ class alarmclock(appapi.AppDaemon):
   # Created an initialization file just to mimic AD it's called from __init__
   def initialize(self):
       self.log("in initialize",level="INFO")
+      self.setup_modes()
       # initialize variables
       self.filename=self.config["AppDaemon"]["app_dir"] + "/" + "alarm_clock.cfg"
       self.log("filename= {}".format(self.filename),level="DEBUG")
@@ -33,6 +34,32 @@ class alarmclock(appapi.AppDaemon):
 
       # setup initial values in HA based on saved alarm settings
       self.updateHA()
+  
+  def setup_modes(self):
+    self.maintMode=False
+    self.vacationMode=False
+    self.partyMode=False
+    self.log("Test App")
+    self.maintMode=self.getOverrideMode("input_boolean.maint")
+    self.vacationMode=self.getOverrideMode("input_boolean.vacation")
+    self.partyMode=self.getOverrideMode("input_boolean.party")
+    self.log("Maint={} Vacation={} Party={}".format(self.maintMode,self.vacationMode,self.partyMode))
+
+  def getOverrideMode(self,ibool):
+    self.listen_state(self.set_mode, entity=ibool)
+    return(True if self.get_state(ibool)=='on' else False)
+
+  def set_mode(self,entity,attribute,old,new,kwargs):
+    if old!=new:
+      if entity=='input_boolean.maint':
+        self.maintMode=True if self.get_state(entity)=='on' else False
+      elif entity=='input_boolean.vacation':
+        self.vacationMode=True if self.get_state(entity)=='on' else False
+      elif entity=='input_boolean.party':
+        self.partyMode=True if self.get_state(entity)=='on' else False
+      else:
+        self.log("unknown entity {}".format(entity))
+    self.log("Maint={} Vacation={} Party={}".format(self.maintMode,self.vacationMode,self.partyMode))
 
   # handle HA restart
   def restartHA(self,event_name,data,kwargs):

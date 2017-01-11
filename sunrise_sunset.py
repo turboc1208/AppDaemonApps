@@ -11,6 +11,7 @@ class sunrise_sunset(appapi.AppDaemon):
 
   def initialize(self):
     self.log("SunUp Sundown setup",level="INFO")
+    self.setup_mode()
     # initialize variables
     self.times={}
     self.times['morning']='05:00:00'
@@ -33,6 +34,31 @@ class sunrise_sunset(appapi.AppDaemon):
     self.run_at_sunset(self.begin_nighttime)
     self.run_at_sunrise(self.begin_morning)
 
+  def setup_mode(self):
+    self.maintMode=False
+    self.vacationMode=False
+    self.partyMode=False
+    self.maintMode=self.getOverrideMode("input_boolean.maint")
+    self.vacationMode=self.getOverrideMode("input_boolean.vacation")
+    self.partyMode=self.getOverrideMode("input_boolean.party")
+    self.log("Maint={} Vacation={} Party={}".format(self.maintMode,self.vacationMode,self.partyMode))
+
+  def getOverrideMode(self,ibool):
+    self.listen_state(self.set_mode, entity=ibool)
+    return(True if self.get_state(ibool)=='on' else False)
+
+  def set_mode(self,entity,attribute,old,new,kwargs):
+    if old!=new:
+      if entity=='input_boolean.maint':
+        self.maintMode=True if self.get_state(entity)=='on' else False
+      elif entity=='input_boolean.vacation':
+        self.vacationMode=True if self.get_state(entity)=='on' else False
+      elif entity=='input_boolean.party':
+        self.partyMode=True if self.get_state(entity)=='on' else False
+      else:
+        self.log("unknown entity {}".format(entity))
+    self.log("Maint={} Vacation={} Party={}".format(self.maintMode,self.vacationMode,self.partyMode))
+
   # this is called only on startup to check the current state of lights and adjust them according to the current time.
   def process_current_state(self):
     self.log("time to process current state of lights","INFO")
@@ -46,6 +72,8 @@ class sunrise_sunset(appapi.AppDaemon):
       # if the sun isn't down, it must be up so if the carriage lights are on, turn them off.
       if self.get_state("switch.carriage_lights")=='on':
         self.turn_on("switch.carriage_lights")
+      elif self.get_state("light.outdoor_patio_light")=='on':
+        self.turn_off("light.outdoor_patio_light")
     
     # check on the lights in the timeout list and schedule turnoff events if they are already on.
     for e in self.timeout_list:
