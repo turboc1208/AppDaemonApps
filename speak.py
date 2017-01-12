@@ -13,8 +13,8 @@ class speaknow(appapi.AppDaemon):
     self.listen_event(self.handle_speak_event,"SPEAK_EVENT")
 
   def handle_speak_event(self, event_name, data, kwargs):
-    self.log("handling speak event {} text={} priority={}".format(event_name,data["text"],data["priority"]))
-    self.say(data["text"],"en",data["priority"])
+    self.log("handling speak event {} text={} language={}  priority={}".format(event_name,data["text"],data["language"],data["priority"]))
+    self.say(data["text"],data["language"],data["priority"])
 
   def check_soundlist(self, kwargs):
 #    self.log("runsound is running")
