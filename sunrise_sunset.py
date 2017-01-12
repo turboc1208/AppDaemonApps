@@ -29,7 +29,7 @@ class sunrise_sunset(appapi.AppDaemon):
     self.process_current_state()
 
     # Setup callbacks
-    self.listen_state(self.light_timeout_check, new="on")
+    self.listen_state(self.light_timeout_check, new="on", old="off")
     self.listen_state(self.process_input_slider, entity="input_slider")
     self.run_at_sunset(self.begin_nighttime)
     self.run_at_sunrise(self.begin_morning)
@@ -185,6 +185,11 @@ class sunrise_sunset(appapi.AppDaemon):
     entity=kwargs["entity_id"]
     self.log("{} timed out turning off".format(entity),level="INFO")
     self.turn_off(entity)
+    priority="1"
+    speaktext = "Please remember to turn out the {}".format(entity)
+    lang = "en"
+    self.fire_event("SPEAK_EVENT",text=speaktext, priority=priority,language=lang)
+
 
   # loop through the group that was passed in as entity and return a dictionary of entities
   def build_timeout_list(self,entity):
