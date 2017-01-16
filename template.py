@@ -3,8 +3,30 @@ import appdaemon.appapi as appapi
 class test(appapi.AppDaemon):
 
   def initialize(self):
+    # self.LOGLEVEL="DEBUG"
     self.log("Test App")
     self.setup_mode()
+
+  # overrides appdaemon log file to handle application specific log files
+  # to use this you must set self.LOGLEVEL="DEBUG" or whatever in the initialize function
+  # although technically you could probably set it anywhere in the app if you wanted to
+  # just debug a function, although you probably want to set it back when you get done
+  # in the function or the rest of the program will start spewing messages
+  def log(self,message,level="INFO"):
+    levels = {                                          # these levels were taken from AppDaemon's files which were taken from python's log handler
+              "CRITICAL": 50,
+              "ERROR": 40,
+              "WARNING": 30,
+              "INFO": 20,
+              "DEBUG": 10,
+              "NOTSET": 0
+            }
+
+    if hasattr(self, "LOGLEVEL"):                        # if the LOGLEVEL attribute has been set then deal with whether to print or not.
+      if levels[level]>=levels[self.LOGLEVEL]:           # if the passed in level is >= to the desired LOGLevel the print it.
+        super().log("{} - message={}".format(level,message))
+    else:                                                # the LOGLEVEL attribute was not set so just do the log file normally
+      super().log("{}".format(message),level)
 
   def setup_mode(self):
     self.maintMode=False
