@@ -1,4 +1,5 @@
 import appdaemon.appapi as appapi
+import appdaemon.conf as conf
 import binascii
 from pysnmp.proto.rfc1902 import *
 from pysnmp.entity.rfc3413.oneliner import cmdgen
@@ -40,97 +41,65 @@ class printermonitor(appapi.AppDaemon):
   def hourly_check_handler(self,kwargs):
     self.check_printers()
 
+  def device_exists(self,entity_id):
+    if entity_id in conf.ha_state:
+      self.log("found {} in HA".format(entity_id))
+      return(True)
+    else:
+      self.log("{} not found in HA".format(entity_id))
+      return(False)
+
   def check_printers(self):
     self.log("in check_printers")
-#    ptrdict=self.getInkjetInkLevels({"dsp1hp":{"ipaddr": "192.168.2.247",
-#                                               "device": "inkjet",
-#                                               "input_slider.blackink":  {"name":{"oid":"1.3.6.1.2.1.43.11.1.1.6.0.1","value":""},
-#                                                          "capacity":{"oid":"1.3.6.1.2.1.43.11.1.1.8.0.1","value":""},
-#                                                          "current":{"oid":"1.3.6.1.2.1.43.11.1.1.9.0.1","value":""}},
-#                                               "input_slider.yellowink": {"name":{"oid":"1.3.6.1.2.1.43.11.1.1.6.0.2","value":""},
-#                                                          "capacity":{"oid":"1.3.6.1.2.1.43.11.1.1.8.0.2","value":""},
-#                                                          "current":{"oid":"1.3.6.1.2.1.43.11.1.1.9.0.2","value":""}},
-#                                               "input_slider.cyanink":   {"name":{"oid":"1.3.6.1.2.1.43.11.1.1.6.0.3","value":""},
-#                                                          "capacity":{"oid":"1.3.6.1.2.1.43.11.1.1.8.0.3","value":""},
-#                                                          "current":{"oid":"1.3.6.1.2.1.43.11.1.1.9.0.3","value":""}},
-#                                               "input_slider.magentaink":{"name":{"oid":"1.3.6.1.2.1.43.11.1.1.6.0.4","value":""},
-#                                                          "capacity":{"oid":"1.3.6.1.2.1.43.11.1.1.8.0.4","value":""},
-#                                                          "current":{"oid":"1.3.6.1.2.1.43.11.1.1.9.0.4","value":""}}
-#                                              },
-#                                     "ofhp1":{"ipaddr": "192.168.2.249",
-#                                              "device": "laserjet",
-#                                              "input_boolean.ofhp1tonerlow":  {"toner":{"oid":"1.3.6.1.4.1.11.2.3.9.1.1.2.10.0","value":""}}}})
-#    self.log("before writing out ptrdict={}".format(ptrdict),"DEBUG")
+
     filename=self.config["AppDaemon"]["app_dir"] + "/" + "PrinterMibs.cfg"
-#    with open(filename,'w') as json_data:
-#      json.dump(ptrdict,json_data)
         
     with open(filename) as json_data:
       ptrdict=json.load(json_data) 
 
     ptrdict=self.getInkjetInkLevels(ptrdict)
 
-#    self.blacklevel=0
-#    self.yellowlevel=0
-#    self.cyanlevel=0
-#    self.magentalevel=0
- 
     self.log("ptrdict={}".format(ptrdict),"DEBUG")
 
-    for sys in ptrdict:
-      self.log("sys={}".format(sys))
+    for sys in ptrdict:                                           # loop through printers in ptrdict
+      self.log("sys={}".format(sys),level="DEBUG")
       level=0.0
-      for component in ptrdict[sys]:
-        self.log("  component={}".format(component))
-        if component=="ipaddr" :
+      group_state="Ok"
+      for component in ptrdict[sys]:                              # loop through each component of the printer (ip address, type, colors, etc)
+        self.log("  component={}".format(component),level="DEBUG")
+        if component=="ipaddr" :                                  # handle IP address
           self.log("  component={} value={}".format(component,ptrdict[sys][component]))
-          continue
-        elif component=="device":
-          self.log("  component={} value={}".format(component,ptrdict[sys][component]))
-          if ptrdict[sys][component]=="inkjet":
+        elif component=="device":                                 # handle printer device type inkjet, laserjet, etc
+          self.log("  component={} value={}".format(component,ptrdict[sys][component]),level="DEBUG")
+          if ptrdict[sys][component]=="inkjet":                   # this is an inkjet
             self.device="inkjet"
-          elif ptrdict[sys][component]=="laserjet":
+          elif ptrdict[sys][component]=="laserjet":               # this is a laserjet
             self.device="laserjet"
           else:
-            self.log("Unknown device type = {}".format(ptrdict[sys][component]))
-        else:
-          self.log("  component={} value={}".format(component,ptrdict[sys][component]))
+            self.log("Unknown device type = {}".format(ptrdict[sys][component]),level="DEBUG")
+            self.device=""
+        else:                                                     # this should be a color
+          self.log("  component={} value={}".format(component,ptrdict[sys][component]),level="DEBUG")
           devtyp,entity=self.split_entity(component)
-          if devtyp=="input_slider":
-            self.log("current={} capacity={}".format(type(ptrdict[sys][component]["current"]["value"]),type(ptrdict[sys][component]["capacity"]["value"])))
+          if devtyp=="input_slider":                              # if this is an input slider, it's supposed to show % used so calc percentage
+            self.log("current={} capacity={}".format(type(ptrdict[sys][component]["current"]["value"]),type(ptrdict[sys][component]["capacity"]["value"])),level="DEBUG")
             level=(float(ptrdict[sys][component]["current"]["value"])/(float(ptrdict[sys][component]["capacity"]["value"])+0.01)+0.01)*100
-            self.set_state(component,state=level)
+            group_state=group_state if level>10 else "Low" 
+            self.set_state(component,state=level)                 # set the state of the HA component
           elif ptrdict[sys][component]=="laserjet":
             level=ptrdict[sys][component]["toner"]["value"]
-            self.set_state(component,state=level)
+            self.set_state(component,state=level)                 # set ha value for input boolean
           else:
-            self.log("Unknown device type - {}".format(ptrdict[sys][component]))
+            self.log("Unknown device type - {}".format(ptrdict[sys][component]),level="WARNING")
 
-#    self.blacklevel=(ptrdict["black"]["current"]["value"]/(ptrdict["black"]["capacity"]["value"]+0.01)+0.01)*100
-#    self.log("blacklevel {} {} {}".format(ptrdict["black"]["current"]["value"],ptrdict["black"]["capacity"]["value"],self.blacklevel),"DEBUG")   
-#    self.yellowlevel=(ptrdict["yellow"]["current"]["value"]/(ptrdict["yellow"]["capacity"]["value"]+0.01)+0.01)*100
-#    self.log("yellowlevel {} {} {}".format(ptrdict["yellow"]["current"]["value"],ptrdict["yellow"]["capacity"]["value"],self.yellowlevel),"DEBUG")
-#    self.cyanlevel=(ptrdict["cyan"]["current"]["value"]/(ptrdict["cyan"]["capacity"]["value"]+0.01)+0.01)*100
-#    self.log("cyanlevel {} {} {}".format(ptrdict["cyan"]["current"]["value"],ptrdict["cyan"]["capacity"]["value"],self.cyanlevel),"DEBUG")
+      if self.device_exists("group."+sys):
+        self.set_state("group."+sys,state=group_state)
 
-#    self.set_state("input_slider.blackink",state=self.blacklevel)
-#    self.set_state("input_slider.yellowink",state=self.yellowlevel)
-#    self.set_state("input_slider.cyanink",state=self.cyanlevel)
 
-#    if (self.blacklevel < 20) or (self.yellowlevel < 20) or (self.cyanlevel < 20):
-#      self.printer_ink_state="Low"
-#    else:
-#      self.printer_ink_state="Ok"
-#    self.log("black={} cyan={} yellow={} magenta={} printer_state={}".format(self.blacklevel,self.yellowlevel,self.cyanlevel,"unknown",self.printer_ink_state),"INFO")
-#    self.set_state("group.dsp1hp",state=self.printer_ink_state)
-
-#    ptrdict=self.getInkjetInkLevels({"ipaddr": "192.168.2.249",
-#                                     "black":  {"toner":{"oid":"1.3.6.1.4.1.11.2.3.9.1.1.2.10.0","value":""}}})
-#    self.tonerlow=ptrdict["black"]["toner"]["value"]
-#    self.log("toner={}".format(self.tonerlow),"INFO")
-#    with open(filename,'w') as outfile:
-#      json.dump(ptrdict,outfile)
-
+  #
+  # setup_mode - sets override values.  If one of the override modes are set we can use those checks to 
+  #              prevent certain activities to start
+  # 
   def setup_mode(self):
     self.log("in setup mode")
     self.maintMode=False
@@ -145,10 +114,14 @@ class printermonitor(appapi.AppDaemon):
     self.log("party done")
     self.log("Maint={} Vacation={} Party={}".format(self.maintMode,self.vacationMode,self.partyMode),"DEBUG")
 
+  # setup listeners for different flags
+  #
   def getOverrideMode(self,ibool):
     self.listen_state(self.set_mode, entity=ibool)
     return(True if self.get_state(ibool)=='on' else False)
 
+  # check the entity that flagged us.  If it's one of our override flags set the appropriate flags
+  #
   def set_mode(self,entity,attribute,old,new,kwargs):
     if old!=new:
       if entity=='input_boolean.maint':
