@@ -1,3 +1,8 @@
+#  Printermonitor -
+#                   Monitor printers for low ink or toner level
+#  Written by Chip Cox
+#  Date 16Jan2017
+#
 import appdaemon.appapi as appapi
 import appdaemon.conf as conf
 import binascii
@@ -15,6 +20,7 @@ class printermonitor(appapi.AppDaemon):
     self.setup_mode()
     self.check_printers()
     self.run_hourly(self.hourly_check_handler,start=None)
+
 
   # overrides appdaemon log file to handle application specific log files
   # to use this you must set self.LOGLEVEL="DEBUG" or whatever in the initialize function
@@ -38,28 +44,36 @@ class printermonitor(appapi.AppDaemon):
       super().log("{}".format(message),level)
 
 
+  # check hourly to see if the print status has changed.
   def hourly_check_handler(self,kwargs):
     self.check_printers()
 
+
+  # function that hopefully will eventually be incorporated into AppDaemon
+  # Check and see if the entity_id exists as an object in HA
   def device_exists(self,entity_id):
     if entity_id in conf.ha_state:
-      self.log("found {} in HA".format(entity_id))
+      self.log("found {} in HA".format(entity_id), level="DEBUG")
       return(True)
     else:
-      self.log("{} not found in HA".format(entity_id))
+      self.log("{} not found in HA".format(entity_id), level="DEBUG")
       return(False)
 
-  def check_printers(self):
-    self.log("in check_printers")
 
+  #
+  # main process to check the printers and update their status in HA
+  def check_printers(self):
+    self.log("in check_printers",level="DEBUG")
+
+    # read in json file with printer and MIB descriptions
     filename=self.config["AppDaemon"]["app_dir"] + "/" + "PrinterMibs.cfg"
         
     with open(filename) as json_data:
       ptrdict=json.load(json_data) 
 
-    ptrdict=self.getInkjetInkLevels(ptrdict)
+    ptrdict=self.getInkjetInkLevels(ptrdict)                      # go query the printer via SNMP
 
-    self.log("ptrdict={}".format(ptrdict),"DEBUG")
+    self.log("ptrdict={}".format(ptrdict),level="DEBUG")
 
     for sys in ptrdict:                                           # loop through printers in ptrdict
       self.log("sys={}".format(sys),level="DEBUG")
@@ -92,7 +106,7 @@ class printermonitor(appapi.AppDaemon):
           else:
             self.log("Unknown device type - {}".format(ptrdict[sys][component]),level="WARNING")
 
-      if self.device_exists("group."+sys):
+      if self.device_exists("group."+sys):                        # if we have a group named the same as the printer update group status
         self.set_state("group."+sys,state=group_state)
 
 
@@ -105,20 +119,22 @@ class printermonitor(appapi.AppDaemon):
     self.maintMode=False
     self.vacationMode=False
     self.partyMode=False
-    self.log("varaibles defined calling getOverrideMode")
+    self.log("varaibles defined calling getOverrideMode",level="DEBUG")
     self.maintMode=self.getOverrideMode("input_boolean.maint")
-    self.log("maint done, calling vacation")
+    self.log("maint done, calling vacation",level="DEBUG")
     self.vacationMode=self.getOverrideMode("input_boolean.vacation")
-    self.log("vacation done, calling party")
+    self.log("vacation done, calling party",level="DEBUG")
     self.partyMode=self.getOverrideMode("input_boolean.party")
-    self.log("party done")
+    self.log("party done",level="DEBUG")
     self.log("Maint={} Vacation={} Party={}".format(self.maintMode,self.vacationMode,self.partyMode),"DEBUG")
+
 
   # setup listeners for different flags
   #
   def getOverrideMode(self,ibool):
     self.listen_state(self.set_mode, entity=ibool)
     return(True if self.get_state(ibool)=='on' else False)
+
 
   # check the entity that flagged us.  If it's one of our override flags set the appropriate flags
   #
@@ -134,39 +150,45 @@ class printermonitor(appapi.AppDaemon):
         self.log("unknown entity {}".format(entity))
     self.log("Maint={} Vacation={} Party={}".format(self.maintMode,self.vacationMode,self.partyMode),"DEBUG")
 
+
+  #
+  # query printer via SNMP
   def getInkjetInkLevels(self,oids):
-    self.log("oids={}".format(oids),"DEBUG")
+    self.log("oids={}".format(oids),level="DEBUG")
+
+    # SNMP query stuff starts here
     cmdGen=cmdgen.CommandGenerator()
     colors={}
     self.log("starting snmptest","DEBUG")
-    for sys in oids:
-      for color in oids[sys]:
+    for sys in oids:                                                          # Outter level is the printer name
+      for color in oids[sys]:                                                 # Second level contains information about printer
         self.log("color={}".format(oids[sys][color]),"DEBUG")
         if color=="device":
           continue
         elif color!="ipaddr":
           for attribute in oids[sys][color]:
             self.log("color={} attribute={}".format(oids[sys][color],oids[sys][color][attribute]),"DEBUG")
-            errorIndication, errorStatus, errorIndex, varBinds = cmdGen.getCmd(
+            errorIndication, errorStatus, errorIndex, varBinds = cmdGen.getCmd(      # Launch SNMP Query
                    cmdgen.CommunityData('public', mpModel=0),
                    cmdgen.UdpTransportTarget((oids[sys]["ipaddr"], 161)),
                    oids[sys][color][attribute]["oid"]
             )
+
             self.log("back from getCmd call {} {} {} {}".format(errorIndication, errorStatus, errorIndex, varBinds),"DEBUG")
-            if errorIndication:
+            if errorIndication:                                               # Handle errors from SNMP query
               self.log("errorIndication={}".format(errorIndication)),"ERROR"
             elif errorStatus:
               self.log(" {} at {}".format(errorStatus,errorIndex),"ERROR")
-            else:
+            else:                                                             # Everything is good.
               self.log("varBinds={}".format(varBinds),"DEBUG")
               for name, varBind in varBinds:
                 self.log("name={} varbind={} is type {}".format(name,varBind,type(varBind)),"DEBUG")
-                if isinstance(varBind,Integer32):
+                if isinstance(varBind,Integer32):                             # handle response based on the object type (int, string, etc)
                   oids[sys][color][attribute]["value"]=int(varBind)
                 elif isinstance(varBind,OctetString):
                   self.log("name={} varBind={} is type {}".format(name,"".join(map(chr,varBind)),type("".join(map(chr,varBind)))),"DEBUG")
                   oids[sys][color][attribute]["value"]="".join(map(chr,varBind))
-                elif isinstance(varBind,NoSuchObject):
+                elif isinstance(varBind,NoSuchObject):                        # in this case SNMP could not find the object so it's not an error, but it's not ok either
                   oids[sys][color][attribute]["value"]="0"
                   self.log("No Such Object")
                 else:
