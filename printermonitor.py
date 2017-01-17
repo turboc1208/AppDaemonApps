@@ -15,7 +15,7 @@ import json
 class printermonitor(appapi.AppDaemon):
 
   def initialize(self):
-    self.LOGLEVEL="DEBUG"
+    #self.LOGLEVEL="DEBUG"
     self.check_printers()
     self.run_hourly(self.hourly_check_handler,start=None)
 
@@ -49,13 +49,13 @@ class printermonitor(appapi.AppDaemon):
 
   # function that hopefully will eventually be incorporated into AppDaemon
   # Check and see if the entity_id exists as an object in HA
-  def device_exists(self,entity_id):
-    if entity_id in conf.ha_state:
-      self.log("found {} in HA".format(entity_id), level="DEBUG")
-      return(True)
-    else:
-      self.log("{} not found in HA".format(entity_id), level="DEBUG")
-      return(False)
+#  def device_exists(self,entity_id):
+#    if entity_id in conf.ha_state:
+#      self.log("found {} in HA".format(entity_id), level="DEBUG")
+#      return(True)
+#    else:
+#      self.log("{} not found in HA".format(entity_id), level="DEBUG")
+#      return(False)
 
 
   #
@@ -75,36 +75,29 @@ class printermonitor(appapi.AppDaemon):
 
     for sys in ptrdict:                                           # loop through printers in ptrdict
       self.log("sys={}".format(sys),level="DEBUG")
-      level=0.0
-      group_state="Ok"
-      for component in ptrdict[sys]:                              # loop through each component of the printer (ip address, type, colors, etc)
-        self.log("  component={}".format(component),level="DEBUG")
-        if component=="ipaddr" :                                  # handle IP address
-          self.log("  component={} value={}".format(component,ptrdict[sys][component]))
-        elif component=="device":                                 # handle printer device type inkjet, laserjet, etc
-          self.log("  component={} value={}".format(component,ptrdict[sys][component]),level="DEBUG")
-          if ptrdict[sys][component]=="inkjet":                   # this is an inkjet
-            self.device="inkjet"
-          elif ptrdict[sys][component]=="laserjet":               # this is a laserjet
-            self.device="laserjet"
-          else:
-            self.log("Unknown device type = {}".format(ptrdict[sys][component]),level="DEBUG")
-            self.device=""
-        else:                                                     # this should be a color
-          self.log("  component={} value={}".format(component,ptrdict[sys][component]),level="DEBUG")
+      if sys=="sample":
+        continue
+      else:
+        level=0.0
+        group_state="Ok"
+        ipa=ptrdict[sys]["ipaddr"]
+        self.device=ptrdict[sys]["device"]
+        for component in ptrdict[sys]["marker"]:
+          self.log("sys={} component={}".format(sys,component),level="DEBUG")
           devtyp,entity=self.split_entity(component)
-          if devtyp=="input_slider":                              # if this is an input slider, it's supposed to show % used so calc percentage
-            self.log("current={} capacity={}".format(type(ptrdict[sys][component]["current"]["value"]),type(ptrdict[sys][component]["capacity"]["value"])),level="DEBUG")
-            level=(float(ptrdict[sys][component]["current"]["value"])/(float(ptrdict[sys][component]["capacity"]["value"])+0.01)+0.01)*100
+          if devtyp =="input_slider":                              # if this is an input slider, it's supposed to show % used so calc percentage
+            self.log("current={} capacity={}".format(type(ptrdict[sys]["marker"][component]["current"]["value"]),type(ptrdict[sys]["marker"][component]["capacity"]["value"])),level="DEBUG")
+            level=(float(ptrdict[sys]["marker"][component]["current"]["value"])/(float(ptrdict[sys]["marker"][component]["capacity"]["value"])+0.01)+0.01)*100
             group_state=group_state if level>10 else "Low" 
             self.set_state(component,state=level)                 # set the state of the HA component
-          elif ptrdict[sys][component]=="laserjet":
-            level=ptrdict[sys][component]["toner"]["value"]
+          elif devtyp =="input_boolean":
+            level=ptrdict[sys]["marker"][component]["tonerlow"]["value"]
+            self.log("component {} - input_boolean level={}".format(component,level),"INFO")
             self.set_state(component,state=level)                 # set ha value for input boolean
           else:
-            self.log("Unknown device type - {}".format(ptrdict[sys][component]),level="WARNING")
+            self.log("Unknown device type - {}".format(component),level="WARNING")
 
-      if self.device_exists("group."+sys):                        # if we have a group named the same as the printer update group status
+      if self.entity_exists("group."+sys):                        # if we have a group named the same as the printer update group status
         self.set_state("group."+sys,state=group_state)
 
 
@@ -118,17 +111,18 @@ class printermonitor(appapi.AppDaemon):
     colors={}
     self.log("starting snmptest","DEBUG")
     for sys in oids:                                                          # Outter level is the printer name
-      for color in oids[sys]:                                                 # Second level contains information about printer
-        self.log("color={}".format(oids[sys][color]),"DEBUG")
-        if color=="device":
-          continue
-        elif color!="ipaddr":
-          for attribute in oids[sys][color]:
-            self.log("color={} attribute={}".format(oids[sys][color],oids[sys][color][attribute]),"DEBUG")
+      if sys=="sample":
+        continue
+      else:
+        for control in oids[sys]["marker"]:
+          self.log("control={} attribute={}".format(control,oids[sys]["marker"][control]),"DEBUG")
+          for attribute in oids[sys]["marker"][control]:
+            self.log("attribute={} oid={}".format(attribute,oids[sys]["marker"][control][attribute]["oid"]),"DEBUG")
+
             errorIndication, errorStatus, errorIndex, varBinds = cmdGen.getCmd(      # Launch SNMP Query
                    cmdgen.CommunityData('public', mpModel=0),
                    cmdgen.UdpTransportTarget((oids[sys]["ipaddr"], 161)),
-                   oids[sys][color][attribute]["oid"]
+                   oids[sys]["marker"][control][attribute]["oid"]
             )
 
             self.log("back from getCmd call {} {} {} {}".format(errorIndication, errorStatus, errorIndex, varBinds),"DEBUG")
@@ -141,13 +135,13 @@ class printermonitor(appapi.AppDaemon):
               for name, varBind in varBinds:
                 self.log("name={} varbind={} is type {}".format(name,varBind,type(varBind)),"DEBUG")
                 if isinstance(varBind,Integer32):                             # handle response based on the object type (int, string, etc)
-                  oids[sys][color][attribute]["value"]=int(varBind)
+                  oids[sys]["marker"][control][attribute]["value"]=int(varBind)
                 elif isinstance(varBind,OctetString):
                   self.log("name={} varBind={} is type {}".format(name,"".join(map(chr,varBind)),type("".join(map(chr,varBind)))),"DEBUG")
-                  oids[sys][color][attribute]["value"]="".join(map(chr,varBind))
+                  oids[sys]["marker"][control][attribute]["value"]="".join(map(chr,varBind))
                 elif isinstance(varBind,NoSuchObject):                        # in this case SNMP could not find the object so it's not an error, but it's not ok either
-                  oids[sys][color][attribute]["value"]="0"
-                  self.log("No Such Object")
+                  oids[sys]["marker"][control][attribute]["value"]="0"
+                  self.log("No Such Object returned from SNMP lookup")
                 else:
                   self.log("unknown type {}".format(type(varBind)),"WARNING")
     return(oids)
