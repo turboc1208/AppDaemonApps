@@ -98,6 +98,7 @@ class alarmclock(appapi.AppDaemon):
       self.displayalarms()
       json.dump(self.alarms,fout)
       fout.close()
+      os.chmod(self.filename,stat.S_IRUSR & stat.S_IWUSR & stat.S_IRGRP & stat.S_IWGRP & stat.S_IROTH & stat.S_IWOTH)
 
   # Load alarms from the json file
   def loadalarms(self):
