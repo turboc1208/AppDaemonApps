@@ -16,8 +16,6 @@ class printermonitor(appapi.AppDaemon):
 
   def initialize(self):
     self.LOGLEVEL="DEBUG"
-    self.log("Test App")
-    self.setup_mode()
     self.check_printers()
     self.run_hourly(self.hourly_check_handler,start=None)
 
@@ -108,47 +106,6 @@ class printermonitor(appapi.AppDaemon):
 
       if self.device_exists("group."+sys):                        # if we have a group named the same as the printer update group status
         self.set_state("group."+sys,state=group_state)
-
-
-  #
-  # setup_mode - sets override values.  If one of the override modes are set we can use those checks to 
-  #              prevent certain activities to start
-  # 
-  def setup_mode(self):
-    self.log("in setup mode")
-    self.maintMode=False
-    self.vacationMode=False
-    self.partyMode=False
-    self.log("varaibles defined calling getOverrideMode",level="DEBUG")
-    self.maintMode=self.getOverrideMode("input_boolean.maint")
-    self.log("maint done, calling vacation",level="DEBUG")
-    self.vacationMode=self.getOverrideMode("input_boolean.vacation")
-    self.log("vacation done, calling party",level="DEBUG")
-    self.partyMode=self.getOverrideMode("input_boolean.party")
-    self.log("party done",level="DEBUG")
-    self.log("Maint={} Vacation={} Party={}".format(self.maintMode,self.vacationMode,self.partyMode),"DEBUG")
-
-
-  # setup listeners for different flags
-  #
-  def getOverrideMode(self,ibool):
-    self.listen_state(self.set_mode, entity=ibool)
-    return(True if self.get_state(ibool)=='on' else False)
-
-
-  # check the entity that flagged us.  If it's one of our override flags set the appropriate flags
-  #
-  def set_mode(self,entity,attribute,old,new,kwargs):
-    if old!=new:
-      if entity=='input_boolean.maint':
-        self.maintMode=True if self.get_state(entity)=='on' else False
-      elif entity=='input_boolean.vacation':
-        self.vacationMode=True if self.get_state(entity)=='on' else False
-      elif entity=='input_boolean.party':
-        self.partyMode=True if self.get_state(entity)=='on' else False
-      else:
-        self.log("unknown entity {}".format(entity))
-    self.log("Maint={} Vacation={} Party={}".format(self.maintMode,self.vacationMode,self.partyMode),"DEBUG")
 
 
   #
