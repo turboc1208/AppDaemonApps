@@ -92,8 +92,8 @@ class printermonitor(appapi.AppDaemon):
             self.set_state(component,state=level)                 # set the state of the HA component
           elif devtyp =="input_boolean":
             level=ptrdict[sys]["marker"][component]["tonerlow"]["value"]
-            self.log("component {} - input_boolean level={}".format(component,level),"INFO")
-            self.set_state(component,state=level)                 # set ha value for input boolean
+            self.log("component {} - input_boolean level={}".format(component,level),"DEBUG")
+            self.set_state(component,state="on" if level==1 else "off")                 # set ha value for input boolean
           else:
             self.log("Unknown device type - {}".format(component),level="WARNING")
 
@@ -141,7 +141,7 @@ class printermonitor(appapi.AppDaemon):
                   oids[sys]["marker"][control][attribute]["value"]="".join(map(chr,varBind))
                 elif isinstance(varBind,NoSuchObject):                        # in this case SNMP could not find the object so it's not an error, but it's not ok either
                   oids[sys]["marker"][control][attribute]["value"]="0"
-                  self.log("No Such Object returned from SNMP lookup")
+                  self.log("No Such Object returned from SNMP lookup: {}".format(oids[sys]["marker"][control][attribute]["oid"]))
                 else:
                   self.log("unknown type {}".format(type(varBind)),"WARNING")
     return(oids)
