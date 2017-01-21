@@ -9,5 +9,7 @@ Files<P>
 <tr><td>talk.py<td>test program using speak.py</tr>
 <tr><td>template.py<td>Template I use for starting new apps</tr>
 <tr><td>vacant_lights.py<td>doesn't work</tr>
+<tr><td>weatherAlert.py<td>trigger persistent notifications on weather underground weather alert data</tr>
+<tr><td>samplealert.json<td>Sample data to use to debug weatherAlert (use LOGLEVEL="DEBUG" to use</tr>
 <tr><td>xmaslights.py<td>handles processing of my Christmas lights.  Includes logic to turn off outdoor lights if it's raining according to weather underground.</tr>
 </table>
