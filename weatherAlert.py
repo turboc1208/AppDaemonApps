@@ -10,6 +10,9 @@
 #     module=weatherAlert
 #     class=weatheralert
 #     alerts = {"HEA","TOR"}
+#     key = "your weather underground key"
+#     location={"city":"your city","state":"your state"}  or {"zmw":"your zmw"}`
+#     
 #
 #   Possible values for alerts are : type	Translated
 #                                    HUR	Hurricane Local Statement
@@ -49,12 +52,17 @@ class weatheralert(appapi.AppDaemon):
     self.LOGLEVEL="INFO"
     self.alertlog={}
     self.log("Weather Alert App")
-    self.key="c54290c5f59273ed"
-    self.state="TN"
-    self.city="Cordova"
-    # you might want to use run_minutely for testing and run hourly for production.
+    self.key=self.args["key"]
+    self.loc=eval(self.args["location"])
+    self.log("loc={}".format(self.loc))
+    if "zmw" in self.loc:
+      self.location=self.loc["zmw"]
+    else:
+      self.location=self.loc["state"]+"/"+self.loc["city"]
+    self.log("location={} key={}".format(self.location,self.key))
+    # you might want to use run_minutely for testing and run every 30 minutes for production.
     #self.run_minutely(self.getAlerts,start=None)
-    self.run_hourly(self.getAlerts,start=None)
+    self.run_every(self.getAlerts,self.datetime(),15*60)
 
   # overrides appdaemon log file to handle application specific log files
   # to use this you must set self.LOGLEVEL="DEBUG" or whatever in the initialize function
@@ -80,7 +88,7 @@ class weatheralert(appapi.AppDaemon):
   ###########################
   def getAlerts(self,kwargs):
     # Get Alert Data
-    url = "http://api.wunderground.com/api/{}/alerts/q/{}/{}.json".format(self.key,self.state,self.city)
+    url = "http://api.wunderground.com/api/{}/alerts/q/{}.json".format(self.key,self.location)
 
     myResponse = requests.get(url)
     self.log("myResponse.status_code={}".format(myResponse.status_code),"DEBUG")
@@ -97,6 +105,11 @@ class weatheralert(appapi.AppDaemon):
         filename=self.config["AppDaemon"]["app_dir"] + "/" + "samplealert.json"
         with open(filename) as json_data:
           jData=json.load(json_data)         
+
+      #self.log("alerts={}".format(jData))
+      if not "alerts" in jData:                                                      # can't do anything without an alerts section
+        self.log("For some reason there is no alerts key in the data coming from WeatherUnderground")
+        return
 
       # load list of desired alerts from appdaemon config file under heading for this app
       self.desired_alerts=self.args["alerts"]
@@ -117,7 +130,10 @@ class weatheralert(appapi.AppDaemon):
                 self.log("this is an alert we are interested in")
                 #self.log("Alert {} issued {} expires {} {}".format(alert["description"],alert["date"],alert["expires"],alert["message"]))
                                                                                        # Alert using a persistent notification ( you could add other methods of alerting here too)
-                self.call_service("persistent_notification/create",title="Weather Alert",message=alert["message"])
+                if "message" in alert:
+                  self.call_service("persistent_notification/create",title="Weather Alert",message=alert["message"])
+                else:
+                  self.call_service("persistent_notification/create",title="Weather Alert",message=alert["level_meteoalarm_description"])
             else:                                                                      # we have already notified on this so don't do it again
               self.log("Alert already in list","DEBUG")
           else:                                                                        # there is an alert but we aren't interested in this type
