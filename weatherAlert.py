@@ -52,7 +52,9 @@ class weatheralert(appapi.AppDaemon):
     self.key="c54290c5f59273ed"
     self.state="TN"
     self.city="Cordova"
-    self.run_minutely(self.getAlerts,start=None)
+    # you might want to use run_minutely for testing and run hourly for production.
+    #self.run_minutely(self.getAlerts,start=None)
+    self.run_hourly(self.getAlerts,start=None)
 
   # overrides appdaemon log file to handle application specific log files
   # to use this you must set self.LOGLEVEL="DEBUG" or whatever in the initialize function
