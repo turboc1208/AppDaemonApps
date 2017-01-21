@@ -17,8 +17,8 @@ class printermonitor(appapi.AppDaemon):
   def initialize(self):
     #self.LOGLEVEL="DEBUG"
     self.check_printers()
-    self.run_hourly(self.hourly_check_handler,start=None)
-
+    #self.run_hourly(self.hourly_check_handler,start=None)
+    self.run_every(self.hourly_check_handler,self.datetime(),5*60)
 
   # overrides appdaemon log file to handle application specific log files
   # to use this you must set self.LOGLEVEL="DEBUG" or whatever in the initialize function
