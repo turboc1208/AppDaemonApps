@@ -36,7 +36,7 @@ class speaknow(appapi.AppDaemon):
         fname = f.name
     tts = gTTS(text=text, lang=lang)
     tts.save(fname)
-    self.filelist[priority].append(fname)
+    self.filelist[str(priority)].append(fname)
   
   def playsound(self,file,priority):
     self.filelist[priority].append(file)
