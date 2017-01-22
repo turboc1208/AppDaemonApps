@@ -45,6 +45,10 @@
 #                                    REC	Record Set
 #                                    REP	Public Reports
 #                                    PUB	Public Information Statement
+#
+#  If you are using the SPEAK app in appdaemon, this will recognize it and send any
+#  alerts to your speakers as well.
+#
 ##################################################################################
 #
 # Visit the weatherunderground at the following link for more information about this API
@@ -64,7 +68,7 @@ class weatheralert(appapi.AppDaemon):
     self.LOGLEVEL="INFO"
     self.alertlog={}
     self.log("Weather Alert App")
-    self.loadHAconfig()
+    self.haConfig=self.loadHAconfig()
     self.key=self.args["key"]
     if "location" in self.args:
       self.loc=eval(self.args["location"])
@@ -160,14 +164,28 @@ class weatheralert(appapi.AppDaemon):
                 self.alertlog[alert["key"]]=alert["expires"]                           # put the key and expire date into the alertlog so we don't show it again
                 self.log("this is an alert we are interested in {}".format(alert["type"]),"INFO")
                 if "message" in alert:                                                 # Alert using a persistent notification ( you could add other methods of alerting here too)
-                  self.call_service("persistent_notification/create",title="Weather Alert",message=alert["message"])
+                  self.sendAlert(alert["message"])
                 else:
-                  self.call_service("persistent_notification/create",title="Weather Alert",message=alert["level_meteoalarm_description"])
+                  self.sendAlert(alert["level_meteoalarm_description"])
+                  #self.call_service("persistent_notification/create",title="Weather Alert",message=alert["level_meteoalarm_description"])
             else:                                                                      # we have already notified on this so don't do it again
               self.log("Alert already in list","DEBUG")
           else:                                                                        # there is an alert but we aren't interested in this type
             self.log("we are not interested in alert type {}".format(alert["type"]),"INFO")
 
+  #######################
+  #
+  # send the proximity alert and send it to speak if it's installed
+  #
+  #######################
+  def sendAlert(self,msg):
+    self.call_service("persistent_notification/create",title="Weather Alert",message=msg)   # send persistent_notification 
+    if not  self.get_app("speak")==None:                                                    # check if speak is running in AppDaemon
+      self.log("Speak is installed")
+      priority=1
+      self.fire_event("SPEAK_EVENT",text=msg,priority=priority,language="en")               # Speak is installed so call it
+    else:
+      self.log("Speak is not installed")                                                    # Speak is not installed
 
   #######################
   # Had some problems getting weather undergrounds date format to behave so I had to parse it out myself
@@ -189,18 +207,18 @@ class weatheralert(appapi.AppDaemon):
   #
   ######################
   def loadHAconfig(self):
-    self.haConfig={}
+    haConfig={}
     locinfo=location.detect_location_info()
-    self.haConfig["IP"]=locinfo.ip
-    self.haConfig["country_code"]=locinfo.country_code
-    self.haConfig["country_name"]=locinfo.country_name
-    self.haConfig["region_code"]=locinfo.region_code
-    self.haConfig["region_name"]=locinfo.region_name
-    self.haConfig["city"]=locinfo.city
-    self.haConfig["zip_code"]=locinfo.zip_code
-    self.haConfig["time_zone"]=locinfo.time_zone
-    self.haConfig["latitude"]=locinfo.latitude
-    self.haConfig["longitude"]=locinfo.longitude
-    self.haConfig["metric"]=locinfo.use_metric
-
+    haConfig["IP"]=locinfo.ip
+    haConfig["country_code"]=locinfo.country_code
+    haConfig["country_name"]=locinfo.country_name
+    haConfig["region_code"]=locinfo.region_code
+    haConfig["region_name"]=locinfo.region_name
+    haConfig["city"]=locinfo.city
+    haConfig["zip_code"]=locinfo.zip_code
+    haConfig["time_zone"]=locinfo.time_zone
+    haConfig["latitude"]=locinfo.latitude
+    haConfig["longitude"]=locinfo.longitude
+    haConfig["metric"]=locinfo.use_metric
+    return haConfig
 
