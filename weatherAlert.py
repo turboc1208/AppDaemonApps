@@ -46,8 +46,12 @@
 #                                    REP	Public Reports
 #                                    PUB	Public Information Statement
 #
-#  If you are using the SPEAK app in appdaemon, this will recognize it and send any
-#  alerts to your speakers as well.
+#  If you are using the following speach apps in appdaemon
+#  sound - by Rene Tode - https://community.home-assistant.io/t/let-appdaemon-speak-without-tts-and-mediaplayer-in-hass/8058
+#  speak - by Chip Cox - https://github.com/turboc1208/AppDaemonApps/blob/master/speak.py
+#
+#  weatherAlert will recognize them and send alerts to your speakers as well
+#  as the persistent_notifications.
 #
 ##################################################################################
 #
@@ -184,8 +188,12 @@ class weatheralert(appapi.AppDaemon):
       self.log("Speak is installed")
       priority=1
       self.fire_event("SPEAK_EVENT",text=msg,priority=priority,language="en")               # Speak is installed so call it
+    elif not self.get_app("soundfunctions")==None:
+      self.log("Soundfunctions is installed")
+      sound = self.get_app("soundfunctions")                                                 
+      sound.say("Any text you like","your_language","your_priority")    
     else:
-      self.log("Speak is not installed")                                                    # Speak is not installed
+      self.log("No supported speack apps are installed")                                                    # Speak is not installed
 
   #######################
   # Had some problems getting weather undergrounds date format to behave so I had to parse it out myself
