@@ -6,7 +6,7 @@ import json
 class weatherforecast(appapi.AppDaemon):
 
   def initialize(self):
-    self.LOGLEVEL="DEBUG"
+    #self.LOGLEVEL="DEBUG"
     self.log("Weather Forecast App")
     self.key="c54290c5f59273ed"
     self.state="TN"
@@ -51,28 +51,29 @@ class weatherforecast(appapi.AppDaemon):
       # Loads (Load String) takes a Json file and converts into python data structure (dict or list, depending on JSON)
       jData = json.loads(myResponse.content.decode('utf-8'))
 
-      self.log("The response contains {0} properties".format(len(jData)))
+      self.log("The response contains {0} properties".format(len(jData)),"DEBUG")
       for key in jData:    # response & features:
-        self.log("key={}".format(key))
+        self.log("key={}".format(key),"DEBUG")
         for x in jData[key]:
-          self.log("x=    {}".format(x))
+          self.log("x=    {}".format(x),"DEBUG")
           if type(jData[key][x]) is dict:
             for y in jData[key][x]:
-              self.log("y=        {}".format(y))
+              self.log("y=        {}".format(y),"DEBUG")
               if type(jData[key][x][y]) is list:
                 for z in range(0,len(jData[key][x][y])):
-                  self.log("z=            {}".format(z))
+                  self.log("z=            {}".format(z),"DEBUG")
                   for z1 in jData[key][x][y][z]:
-                    self.log("z1=                {}".format(z1))
+                    self.log("z1=                {}".format(z1),"DEBUG")
                     if z1=="fcttext":
-                      msg=jData[key][x][y][z][z1]
+                      msg=jData[key][x][y][z]["title"] + ", " +jData[key][x][y][z][z1]
                       priority="1"
                       lang="en"
+                      self.log("msg=".format(msg),"INFO")
                       self.fire_event("SPEAK_EVENT",text=msg,priority=priority,language=lang)
                     else:
-                      self.log("z2                    {}".format(jData[key][x][y][z][z1]))
+                      self.log("z2                    {}".format(jData[key][x][y][z][z1]),"DEBUG")
               else:
-                self.log("y=            {}".format(jData[key][x][y]))
+                self.log("y=            {}".format(jData[key][x][y]),"DEBUG")
           else:
-            self.log("x=        {}".format(jData[key][x]))
+            self.log("x=        {}".format(jData[key][x]),"DEBUG")
 
