@@ -1,6 +1,9 @@
 ###################################################################
 # Weather Alert - Poll for alerts from weatherunderground and alert to HA
 # Written By : Chip Cox  20JAN2017
+#              
+#    V0.01.1 21JAN2017 - updated to handle european data
+#    V0.01.2 21JAN2017 - added configuration options 
 #
 ###################################################################
 #
@@ -11,9 +14,17 @@
 #     class=weatheralert
 #     alerts = {"HEA","TOR"}
 #     key = "your weather underground key"
-#     location={"city":"your city","state":"your state"}  or {"zmw":"your zmw"}`
-#     
+#   * location={"city":"your city","state":"your state"}  or {"zmw":"your zmw"}`
+#   * frequency=minutes between checks   ( Defaults to 15 min )
 #
+#   * entries are  optional
+#
+#     location can be expressed as a dictionary containing the following:
+#                                    {"city":"your city", "state":"your state"}
+#                                    {"zip":"your zip code"}
+#                                    {"Country":"Your country name","city":"Your city"}
+#                                    if location is not in the config file, it defaults to your HomeAssistant Latitude/Longitude
+#     
 #   Possible values for alerts are : type	Translated
 #                                    HUR	Hurricane Local Statement
 #                                    TOR	Tornado Warning
@@ -45,24 +56,45 @@ from requests.auth import HTTPDigestAuth
 import json
 import time
 import datetime
-             
+from homeassistant.util import location    
+         
 class weatheralert(appapi.AppDaemon):
 
   def initialize(self):
     self.LOGLEVEL="INFO"
     self.alertlog={}
     self.log("Weather Alert App")
+    self.loadHAconfig()
     self.key=self.args["key"]
-    self.loc=eval(self.args["location"])
-    self.log("loc={}".format(self.loc))
+    if "location" in self.args:
+      self.loc=eval(self.args["location"])
+    else:
+      self.loc={}
+
     if "zmw" in self.loc:
       self.location=self.loc["zmw"]
-    else:
+    elif "zip" in self.loc:
+      self.location=self.loc("zip")
+    elif ("country" in self.loc) and ("city" in self.loc):
+      self.location=self.loc["country"]+"/"+self.loc["city"]
+    elif ("city" in self.loc) and ("state" in self.loc):
       self.location=self.loc["state"]+"/"+self.loc["city"]
-    self.log("location={} key={}".format(self.location,self.key))
-    # you might want to use run_minutely for testing and run every 30 minutes for production.
+    else:
+      self.location=str(self.haConfig["latitude"])+","+str(self.haConfig["longitude"])
+
+    if "frequency" in self.args:
+      self.freq=int(float(self.args["frequency"]))
+    else:
+      self.freq=15
+    self.desired_alerts=self.args["alerts"]
+
+    self.log("Location={}".format(self.location))
+    self.log("Key=ImNotTelling")
+    self.log("Alert Levels={}".format(self.desired_alerts))
+    self.log("Setting WeatherAlert to run ever {} minutes or {} seconds".format(self.freq,self.freq*60),"INFO")
+    # you might want to use run_minutely for testing and run every (self.freq)  minutes for production.
     #self.run_minutely(self.getAlerts,start=None)
-    self.run_every(self.getAlerts,self.datetime(),15*60)
+    self.run_every(self.getAlerts,self.datetime(),self.freq*60)
 
   # overrides appdaemon log file to handle application specific log files
   # to use this you must set self.LOGLEVEL="DEBUG" or whatever in the initialize function
@@ -89,6 +121,7 @@ class weatheralert(appapi.AppDaemon):
   def getAlerts(self,kwargs):
     # Get Alert Data
     url = "http://api.wunderground.com/api/{}/alerts/q/{}.json".format(self.key,self.location)
+    self.log("url={}".format(url),"DEBUG")
 
     myResponse = requests.get(url)
     self.log("myResponse.status_code={}".format(myResponse.status_code),"DEBUG")
@@ -106,13 +139,11 @@ class weatheralert(appapi.AppDaemon):
         with open(filename) as json_data:
           jData=json.load(json_data)         
 
-      #self.log("alerts={}".format(jData))
+      self.log("alerts={}".format(jData),"DEBUG")
       if not "alerts" in jData:                                                      # can't do anything without an alerts section
         self.log("For some reason there is no alerts key in the data coming from WeatherUnderground")
         return
 
-      # load list of desired alerts from appdaemon config file under heading for this app
-      self.desired_alerts=self.args["alerts"]
       self.log("The response contains {0} properties".format(len(jData)),"DEBUG")
       if len(jData)==0:                                                              # if there aren't any alerts clean out the alertlog and skip the rest.
         self.alertlog={}
@@ -127,10 +158,8 @@ class weatheralert(appapi.AppDaemon):
                 self.log("Alert has expired {}".format(alert),"INFO")
               else:                                                                    # nope it has not expired
                 self.alertlog[alert["key"]]=alert["expires"]                           # put the key and expire date into the alertlog so we don't show it again
-                self.log("this is an alert we are interested in")
-                #self.log("Alert {} issued {} expires {} {}".format(alert["description"],alert["date"],alert["expires"],alert["message"]))
-                                                                                       # Alert using a persistent notification ( you could add other methods of alerting here too)
-                if "message" in alert:
+                self.log("this is an alert we are interested in {}".format(alert["type"]),"INFO")
+                if "message" in alert:                                                 # Alert using a persistent notification ( you could add other methods of alerting here too)
                   self.call_service("persistent_notification/create",title="Weather Alert",message=alert["message"])
                 else:
                   self.call_service("persistent_notification/create",title="Weather Alert",message=alert["level_meteoalarm_description"])
@@ -153,3 +182,25 @@ class weatheralert(appapi.AppDaemon):
     tdate=datetime.datetime.strptime(strdate + " " + strtime,"%B %d, %Y %I:%M %p %Z")
     self.log("tDate {}".format(tdate),"DEBUG")
     return tdate
+
+  ######################
+  # 
+  #  Load location configuration data from HA
+  #
+  ######################
+  def loadHAconfig(self):
+    self.haConfig={}
+    locinfo=location.detect_location_info()
+    self.haConfig["IP"]=locinfo.ip
+    self.haConfig["country_code"]=locinfo.country_code
+    self.haConfig["country_name"]=locinfo.country_name
+    self.haConfig["region_code"]=locinfo.region_code
+    self.haConfig["region_name"]=locinfo.region_name
+    self.haConfig["city"]=locinfo.city
+    self.haConfig["zip_code"]=locinfo.zip_code
+    self.haConfig["time_zone"]=locinfo.time_zone
+    self.haConfig["latitude"]=locinfo.latitude
+    self.haConfig["longitude"]=locinfo.longitude
+    self.haConfig["metric"]=locinfo.use_metric
+
+
