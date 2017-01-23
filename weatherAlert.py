@@ -16,6 +16,7 @@
 #     key = "your weather underground key"
 #   * location={"city":"your city","state":"your state"}  or {"zmw":"your zmw"}`
 #   * frequency=minutes between checks   ( Defaults to 15 min )
+#   * title=title of persistent notification window
 #
 #   * entries are  optional
 #
@@ -78,6 +79,11 @@ class weatheralert(appapi.AppDaemon):
       self.loc=eval(self.args["location"])
     else:
       self.loc={}
+
+    if "title" in self.args:
+      self.title=self.args["title"]
+    else:
+      self.title="Weather Alert"
 
     if "zmw" in self.loc:
       self.location=self.loc["zmw"]
@@ -183,7 +189,7 @@ class weatheralert(appapi.AppDaemon):
   #
   #######################
   def sendAlert(self,msg):
-    self.call_service("persistent_notification/create",title="Weather Alert",message=msg)   # send persistent_notification 
+    self.call_service("persistent_notification/create",title=self.title,message=msg)   # send persistent_notification 
     if not  self.get_app("speak")==None:                                                    # check if speak is running in AppDaemon
       self.log("Speak is installed")
       priority=1
