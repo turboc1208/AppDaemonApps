@@ -65,7 +65,7 @@ from requests.auth import HTTPDigestAuth
 import json
 import time
 import datetime
-from homeassistant.util import location    
+#from homeassistant.util import location    
          
 class weatheralert(appapi.AppDaemon):
 
@@ -95,7 +95,7 @@ class weatheralert(appapi.AppDaemon):
       self.location=self.loc["state"]+"/"+self.loc["city"]
     else:
       self.location=str(self.haConfig["latitude"])+","+str(self.haConfig["longitude"])
-
+    self.log("haConfig={}".format(self.haConfig))
     if "frequency" in self.args:
       self.freq=int(float(self.args["frequency"]))
     else:
