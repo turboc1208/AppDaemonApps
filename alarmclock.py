@@ -9,6 +9,7 @@ import appdaemon.appapi as appapi
 import os
 import json
 import datetime
+import stat
          
 class alarmclock(appapi.AppDaemon):
   
