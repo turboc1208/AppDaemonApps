@@ -1,4 +1,5 @@
 import appdaemon.appapi as appapi
+import inspect
              
 class test(appapi.AppDaemon):
 
@@ -7,7 +8,7 @@ class test(appapi.AppDaemon):
     self.log("Test App")
     self.setup_mode()
 
-  # overrides appdaemon log file to handle application specific log files
+ # overrides appdaemon log file to handle application specific log files
   # to use this you must set self.LOGLEVEL="DEBUG" or whatever in the initialize function
   # although technically you could probably set it anywhere in the app if you wanted to
   # just debug a function, although you probably want to set it back when you get done
@@ -24,9 +25,10 @@ class test(appapi.AppDaemon):
 
     if hasattr(self, "LOGLEVEL"):                        # if the LOGLEVEL attribute has been set then deal with whether to print or not.
       if levels[level]>=levels[self.LOGLEVEL]:           # if the passed in level is >= to the desired LOGLevel the print it.
-        super().log("{} - message={}".format(level,message))
+        super().log("{}({}) - {} - message={}".format(inspect.stack()[1][3],inspect.stack()[1][2],level,message))
     else:                                                # the LOGLEVEL attribute was not set so just do the log file normally
       super().log("{}".format(message),level)
+
 
   def setup_mode(self):
     self.maintMode=False
@@ -53,3 +55,23 @@ class test(appapi.AppDaemon):
         self.log("unknown entity {}".format(entity))
     self.log("Maint={} Vacation={} Party={}".format(self.maintMode,self.vacationMode,self.partyMode),"DEBUG")
 
+  ######################
+  # 
+  #  Load location configuration data from HA
+  #
+  ######################
+  def loadHAconfig(self):
+    haConfig={}
+    locinfo=location.detect_location_info()
+    haConfig["IP"]=locinfo.ip
+    haConfig["country_code"]=locinfo.country_code
+    haConfig["country_name"]=locinfo.country_name
+    haConfig["region_code"]=locinfo.region_code
+    haConfig["region_name"]=locinfo.region_name
+    haConfig["city"]=locinfo.city
+    haConfig["zip_code"]=locinfo.zip_code
+    haConfig["time_zone"]=locinfo.time_zone
+    haConfig["latitude"]=locinfo.latitude
+    haConfig["longitude"]=locinfo.longitude
+    haConfig["metric"]=locinfo.use_metric
+    return haConfig
