@@ -16,6 +16,9 @@ class alarmclock(appapi.AppDaemon):
   # Created an initialization file just to mimic AD it's called from __init__
   def initialize(self):
       self.log("in initialize",level="INFO")
+
+      return
+
       self.setup_modes()
       # initialize variables
       self.filename=self.config["AppDaemon"]["app_dir"] + "/" + "alarm_clock.cfg"
